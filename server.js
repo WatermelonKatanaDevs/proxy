@@ -165,8 +165,22 @@ app.use(async(req,res)=>{
   return streamResponse(res,response,true);
 });
 server.on("upgrade",async(req,socket,head)=>{
-  let target; try { target=getTarget(req); } catch(e) { socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"+e.message); return; }
-  const h=headersFor(req); let upstream;
+  let target, isolated=false;
+  try {
+    const incoming=new URL(req.url,"http://"+(req.headers.host||"localhost"));
+    if(incoming.pathname.startsWith(ISOLATION)) {
+      const route=incoming.pathname.slice(ISOLATION.length),slash=route.indexOf("/");
+      const id=slash<0?route:route.slice(0,slash),path=slash<0?"":route.slice(slash+1),session=sessions.get(id);
+      if(!validateId(id)||!session||session.expires<=Date.now()) throw Error("Isolation session missing or expired.");
+      const base=new URL(session.baseUrl),asset=path.startsWith("__opendaw_assets/");
+      if(asset) { target=new URL(path.slice(17),ASSET_ORIGIN+"/"); if(target.origin!==ASSET_ORIGIN) throw Error("Invalid isolated asset path."); }
+      else { target=path?new URL(path,base):base; if(target.origin!==session.origin||!target.pathname.startsWith(session.basePath)) throw Error("Path is outside this isolation session."); }
+      if(incoming.search) target.search=incoming.search;
+      validateTarget(target,incoming.origin); isolated=true;
+    } else target=getTarget(req);
+  } catch(e) { socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"+e.message); return; }
+  const h=headersFor(req,isolated); if(isolated) h.set("origin",target.origin);
+  let upstream;
   try { upstream=new WebSocket(target.toString(),{headers:Object.fromEntries(h),followRedirects:true}); await new Promise((ok,no)=>{upstream.once("open",ok);upstream.once("error",no);}); }
   catch(e) { try { upstream?.terminate(); } catch {} socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\nWebSocket Proxy Error: "+e.message); return; }
   wss.handleUpgrade(req,socket,head,client=>{
