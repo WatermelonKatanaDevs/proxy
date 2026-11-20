@@ -179,7 +179,7 @@ server.on("upgrade",async(req,socket,head)=>{
       validateTarget(target,incoming.origin); isolated=true;
     } else target=getTarget(req);
   } catch(e) { socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"+e.message); return; }
-  const h=headersFor(req,isolated); if(isolated) h.set("origin",target.origin);
+  const h=headersFor(req,isolated); for(const k of ["connection","upgrade","sec-websocket-key","sec-websocket-version","sec-websocket-extensions"]) h.delete(k); if(isolated) h.set("origin",target.origin);
   let upstream;
   try { upstream=new WebSocket(target.toString(),{headers:Object.fromEntries(h),followRedirects:true}); await new Promise((ok,no)=>{upstream.once("open",ok);upstream.once("error",no);}); }
   catch(e) { try { upstream?.terminate(); } catch {} socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\nWebSocket Proxy Error: "+e.message); return; }
