@@ -154,7 +154,7 @@ app.use(async(req,res)=>{
   const h=headersFor(req),init={method:req.method,headers:h,redirect:"follow"};
   if(!["GET","HEAD"].includes(req.method)&&req.body?.length) init.body=req.body;
   let response=null,failed=false,finalTargetUrl=null;
-  try { response=await fetch(target,init); if(response) finalTargetUrl=response.url||target.href; } catch { failed=true; }
+  try { response=await fetch(target,init); if(response?.redirected) finalTargetUrl=response.url||target.href; } catch { failed=true; }
   if(process.env.USE_CORSFIX_FALLBACK!=="false"&&(failed||(response&&RETRY.has(response.status)))) {
     try {
       const fh=new Headers(h); if(process.env.CORSFIX_API_KEY) fh.set("x-corsfix-key",process.env.CORSFIX_API_KEY);
