@@ -153,15 +153,28 @@ app.use(async(req,res)=>{
   let target; try { target=getTarget(req); } catch(e) { return text(res,e.status||400,e.message); }
   const h=headersFor(req),init={method:req.method,headers:h,redirect:"follow"};
   if(!["GET","HEAD"].includes(req.method)&&req.body?.length) init.body=req.body;
-  let response=null,failed=false; try { response=await fetch(target,init); } catch { failed=true; }
+  let response=null,failed=false,finalTargetUrl=null;
+  try { response=await fetch(target,init); if(response) finalTargetUrl=response.url||target.href; } catch { failed=true; }
   if(process.env.USE_CORSFIX_FALLBACK!=="false"&&(failed||(response&&RETRY.has(response.status)))) {
     try {
       const fh=new Headers(h); if(process.env.CORSFIX_API_KEY) fh.set("x-corsfix-key",process.env.CORSFIX_API_KEY);
       const fi={method:req.method,headers:fh,redirect:"follow"}; if(!["GET","HEAD"].includes(req.method)&&req.body?.length) fi.body=req.body;
-      const fallback=await fetch(CORSFIX+target.toString(),fi); if(fallback.ok||failed) response=fallback;
+      const fallback=await fetch(CORSFIX+target.toString(),fi);
+      if(fallback.ok||failed) { response=fallback; finalTargetUrl=null; }
     } catch(e) { if(!response) return text(res,502,"Proxy Error: "+e.message); }
   }
   if(!response) return text(res,502,"Proxy request failed");
+  if(finalTargetUrl) {
+    try {
+      const finalUrl=new URL(finalTargetUrl);
+      if(finalUrl.protocol==="http:"||finalUrl.protocol==="https:") {
+        const responseHeaders=new Headers(response.headers);
+        responseHeaders.delete("x-wk-final-url");
+        responseHeaders.set("X-WK-Final-URL",finalUrl.href);
+        response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:responseHeaders});
+      }
+    } catch {}
+  }
   return streamResponse(res,response,true);
 });
 server.on("upgrade",async(req,socket,head)=>{
