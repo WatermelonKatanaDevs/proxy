@@ -169,8 +169,8 @@ app.use(async(req,res)=>{
       const finalUrl=new URL(finalTargetUrl);
       if(finalUrl.protocol==="http:"||finalUrl.protocol==="https:") {
         const responseHeaders=new Headers(response.headers);
-        responseHeaders.delete("x-wk-final-url");
-        responseHeaders.set("X-WK-Final-URL",finalUrl.href);
+        responseHeaders.delete("x-final-url");
+        responseHeaders.set("X-Final-URL",finalUrl.href);
         response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:responseHeaders});
       }
     } catch {}
